@@ -121,6 +121,10 @@ async function routeRequest(req, res) {
     return serveFile(res, path.join(ROOT, "display.html"), "text/html; charset=utf-8");
   }
 
+  if (req.method === "GET" && reqUrl.pathname === "/settings.html") {
+    return serveFile(res, path.join(ROOT, "settings.html"), "text/html; charset=utf-8");
+  }
+
   if (req.method === "GET" && reqUrl.pathname.startsWith("/media/")) {
     return serveMedia(res, reqUrl.pathname);
   }
@@ -175,12 +179,16 @@ async function serveFile(res, filePath, contentType) {
 }
 
 async function serveMedia(res, pathname) {
-  const filePath = path.join(ROOT, pathname);
-  if (!filePath.startsWith(MEDIA_DIR)) {
+  const relativePath = pathname.replace(/^\/+/, "");
+  const decodedPath = path.normalize(decodeURIComponent(relativePath));
+  const filePath = path.resolve(ROOT, decodedPath);
+
+  if (!filePath.startsWith(path.resolve(MEDIA_DIR))) {
     return sendJson(res, 403, { error: "forbidden" });
   }
 
   try {
+    await fsp.access(filePath, fs.constants.R_OK);
     const stream = fs.createReadStream(filePath);
     const type = contentTypeFor(path.extname(filePath));
     res.writeHead(200, { "Content-Type": type, "Cache-Control": "no-store" });

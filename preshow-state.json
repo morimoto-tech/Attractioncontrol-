@@ -1,30 +1,170 @@
 {
-  "currentScene": "standby",
+  "currentScene": "main",
   "isPlaying": false,
-  "endingReturnDelay": 15,
+  "endingReturnDelay": 95,
   "masterVolume": 100,
   "returnAt": null,
   "scenes": {
     "standby": {
-      "videoPath": "",
-      "audioPath": "",
-      "videoName": "",
-      "audioName": ""
+      "videoPath": "/media/standby-video.mp4",
+      "audioPath": "/media/standby-audio.mp3",
+      "videoName": "0528.mp4",
+      "audioName": "Zedd - Stache [lw97SWRo70I] (mp3cut.net).mp3"
     },
     "main": {
-      "videoPath": "",
+      "videoPath": "/media/main-video.mp4",
       "audioPath": "",
-      "videoName": "",
+      "videoName": "TEDx_openingvideo.mp4",
       "audioName": ""
     },
     "ending": {
-      "videoPath": "",
+      "videoPath": "/media/ending-video.mp4",
       "audioPath": "",
-      "videoName": "",
+      "videoName": "ソアリン 乗車前ビデオ.mp4",
       "audioName": ""
     }
   },
   "logs": [
+    {
+      "time": "18:46:39",
+      "message": "再生を停止しました。"
+    },
+    {
+      "time": "18:46:39",
+      "message": "再生を停止しました。"
+    },
+    {
+      "time": "18:46:38",
+      "message": "再生を停止しました。"
+    },
+    {
+      "time": "18:46:38",
+      "message": "再生を停止しました。"
+    },
+    {
+      "time": "18:46:38",
+      "message": "再生を停止しました。"
+    },
+    {
+      "time": "18:45:19",
+      "message": "プレショーシーンを再生しました。"
+    },
+    {
+      "time": "18:45:17",
+      "message": "再生を停止しました。"
+    },
+    {
+      "time": "18:45:17",
+      "message": "再生を停止しました。"
+    },
+    {
+      "time": "18:45:17",
+      "message": "再生を停止しました。"
+    },
+    {
+      "time": "18:43:43",
+      "message": "待機中シーンを再生しました。"
+    },
+    {
+      "time": "18:43:41",
+      "message": "再生を停止しました。"
+    },
+    {
+      "time": "18:43:39",
+      "message": "待機中シーンを再生しました。"
+    },
+    {
+      "time": "18:43:39",
+      "message": "待機中シーンを再生しました。"
+    },
+    {
+      "time": "18:43:37",
+      "message": "待機中に映像を登録しました。"
+    },
+    {
+      "time": "18:42:48",
+      "message": "待機中シーンを再生しました。"
+    },
+    {
+      "time": "18:42:47",
+      "message": "再生を停止しました。"
+    },
+    {
+      "time": "18:42:45",
+      "message": "待機中シーンを再生しました。"
+    },
+    {
+      "time": "18:42:45",
+      "message": "待機中シーンを再生しました。"
+    },
+    {
+      "time": "18:42:44",
+      "message": "待機中シーンを再生しました。"
+    },
+    {
+      "time": "18:42:44",
+      "message": "待機中シーンを再生しました。"
+    },
+    {
+      "time": "18:42:43",
+      "message": "待機中シーンを再生しました。"
+    },
+    {
+      "time": "18:42:41",
+      "message": "待機中に映像を登録しました。"
+    },
+    {
+      "time": "18:39:51",
+      "message": "待機中シーンを再生しました。"
+    },
+    {
+      "time": "18:38:59",
+      "message": "終了後シーンを再生しました。"
+    },
+    {
+      "time": "18:38:38",
+      "message": "プレショーシーンを再生しました。"
+    },
+    {
+      "time": "18:38:33",
+      "message": "設定を更新しました。自動復帰 95秒 / 音量 100%"
+    },
+    {
+      "time": "18:38:32",
+      "message": "設定を更新しました。自動復帰 95秒 / 音量 100%"
+    },
+    {
+      "time": "18:38:32",
+      "message": "設定を更新しました。自動復帰 95秒 / 音量 100%"
+    },
+    {
+      "time": "18:38:16",
+      "message": "終了後に映像を登録しました。"
+    },
+    {
+      "time": "18:38:04",
+      "message": "プレショーに映像を登録しました。"
+    },
+    {
+      "time": "18:37:08",
+      "message": "待機中シーンを再生しました。"
+    },
+    {
+      "time": "18:37:06",
+      "message": "再生を停止しました。"
+    },
+    {
+      "time": "18:36:54",
+      "message": "待機中シーンを再生しました。"
+    },
+    {
+      "time": "18:36:51",
+      "message": "待機中に音声を登録しました。"
+    },
+    {
+      "time": "18:36:47",
+      "message": "待機中に映像を登録しました。"
+    },
     {
       "time": "16:29:02",
       "message": "プレショーサーバーを初期化しました。"
