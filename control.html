@@ -435,6 +435,7 @@
         assignMedia(audioPlayer, audioUrl);
       }
 
+      videoPlayer.loop = state.currentScene === "standby";
       videoPlayer.volume = state.masterVolume / 100;
       audioPlayer.volume = state.masterVolume / 100;
 
@@ -498,14 +499,16 @@
     async function playMedia(video, audio) {
       try {
         if (video.src) {
-          video.currentTime = 0;
-          await video.play();
+          if (video.paused) {
+            await video.play();
+          }
         }
       } catch (error) {}
       try {
         if (audio.src) {
-          audio.currentTime = 0;
-          await audio.play();
+          if (audio.paused) {
+            await audio.play();
+          }
         }
       } catch (error) {}
     }
