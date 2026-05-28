@@ -1,0 +1,33 @@
+{
+  "currentScene": "standby",
+  "isPlaying": false,
+  "endingReturnDelay": 15,
+  "masterVolume": 100,
+  "returnAt": null,
+  "scenes": {
+    "standby": {
+      "videoPath": "",
+      "audioPath": "",
+      "videoName": "",
+      "audioName": ""
+    },
+    "main": {
+      "videoPath": "",
+      "audioPath": "",
+      "videoName": "",
+      "audioName": ""
+    },
+    "ending": {
+      "videoPath": "",
+      "audioPath": "",
+      "videoName": "",
+      "audioName": ""
+    }
+  },
+  "logs": [
+    {
+      "time": "16:29:02",
+      "message": "プレショーサーバーを初期化しました。"
+    }
+  ]
+}

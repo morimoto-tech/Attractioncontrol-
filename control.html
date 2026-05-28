@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>プレショー操作ページ</title>
+  <style>
+    :root {
+      --bg-1: #0f1523;
+      --bg-2: #19253f;
+      --panel: rgba(14, 21, 34, 0.82);
+      --panel-strong: rgba(20, 29, 47, 0.94);
+      --line: rgba(255, 255, 255, 0.1);
+      --text: #eef3ff;
+      --muted: #98a7c9;
+      --accent: #ff6b3d;
+      --accent-soft: rgba(255, 107, 61, 0.16);
+      --danger: #ff5d73;
+      --shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+      --radius: 22px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Yu Gothic UI", "Hiragino Sans", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 10% 10%, rgba(57, 217, 138, 0.12), transparent 24%),
+        radial-gradient(circle at 85% 15%, rgba(255, 107, 61, 0.18), transparent 26%),
+        linear-gradient(180deg, var(--bg-2), var(--bg-1));
+    }
+
+    .shell { max-width: 1480px; margin: 0 auto; padding: 28px; }
+    .hero { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 20px; margin-bottom: 22px; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+      padding: 24px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: #ffb49d;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: clamp(30px, 5vw, 50px); line-height: 1.02; margin-top: 16px; }
+    .lead, .sub { color: var(--muted); line-height: 1.7; }
+    .lead { margin-top: 14px; max-width: 62ch; }
+
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 22px; }
+    .metric {
+      padding: 16px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--line);
+    }
+    .metric span { display: block; color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+    .metric strong { font-size: 28px; }
+
+    .toolbar, .scene-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .hero-side { display: grid; gap: 16px; }
+    .state-screen {
+      padding: 18px;
+      border-radius: 20px;
+      background:
+        linear-gradient(135deg, rgba(255, 107, 61, 0.18), rgba(57, 217, 138, 0.12)),
+        rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      display: grid;
+      gap: 16px;
+    }
+    .status-chip {
+      display: inline-flex;
+      gap: 10px;
+      align-items: center;
+      width: fit-content;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      font-weight: 700;
+    }
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #39d98a;
+      box-shadow: 0 0 0 6px rgba(57, 217, 138, 0.14);
+    }
+    .big { font-size: 38px; font-weight: 800; }
+
+    button, input {
+      font: inherit;
+      border-radius: 14px;
+    }
+    button {
+      border: none;
+      cursor: pointer;
+      padding: 12px 16px;
+      font-weight: 800;
+      transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+    button:hover { transform: translateY(-1px); box-shadow: 0 12px 24px rgba(0, 0, 0, 0.22); }
+    .primary { background: var(--accent); color: white; }
+    .secondary { background: rgba(255, 255, 255, 0.08); color: var(--text); border: 1px solid rgba(255, 255, 255, 0.08); }
+    .danger { background: rgba(255, 93, 115, 0.16); color: #ffc8d1; border: 1px solid rgba(255, 93, 115, 0.22); }
+
+    .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 20px; }
+    .span-8 { grid-column: span 8; }
+    .span-4 { grid-column: span 4; }
+
+    .section h2 { font-size: 22px; margin-bottom: 6px; }
+    .section-sub { color: var(--muted); margin-bottom: 18px; line-height: 1.6; }
+
+    .scene-list, .log { display: grid; gap: 14px; }
+    .scene-card, .log-item {
+      padding: 18px;
+      border-radius: 20px;
+      background: var(--panel-strong);
+      border: 1px solid var(--line);
+    }
+    .scene-card.active { border-color: rgba(255, 107, 61, 0.6); box-shadow: inset 0 0 0 1px rgba(255, 107, 61, 0.28); }
+    .scene-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+    .scene-type, .pill {
+      display: inline-flex;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .file-grid, .setting-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+    .field { display: grid; gap: 8px; }
+    .field label { font-size: 13px; font-weight: 700; color: var(--muted); }
+    .field input[type="file"], .field input[type="number"] {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text);
+    }
+
+    video {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border-radius: 20px;
+      background: #070b13;
+      border: 1px solid var(--line);
+      object-fit: cover;
+    }
+    audio { width: 100%; }
+    .audio-box {
+      padding: 16px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--line);
+      display: grid;
+      gap: 10px;
+    }
+    .hint { color: var(--muted); font-size: 13px; line-height: 1.5; }
+    .empty {
+      padding: 18px;
+      border-radius: 16px;
+      border: 1px dashed var(--line);
+      color: var(--muted);
+      text-align: center;
+    }
+
+    @media (max-width: 1180px) {
+      .hero, .grid, .metrics, .file-grid, .setting-grid { grid-template-columns: 1fr; }
+      .span-4, .span-8 { grid-column: auto; }
+    }
+
+    @media (max-width: 720px) {
+      .shell { padding: 16px; }
+      .panel, .scene-card, .log-item { padding: 18px; }
+      .scene-head { flex-direction: column; }
+      .big { font-size: 30px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="hero">
+      <div class="panel">
+        <span class="eyebrow">Control Page</span>
+        <h1>プレショー操作ページ</h1>
+        <p class="lead">
+          このページを操作端末で開きます。別端末で開いた表示ページに、シーン切替と音声・映像の変更がそのまま反映されます。
+        </p>
+        <div class="metrics">
+          <div class="metric"><span>現在のシーン</span><strong id="currentSceneLabel">待機中</strong></div>
+          <div class="metric"><span>自動復帰まで</span><strong id="returnCountdown">-</strong></div>
+          <div class="metric"><span>操作状態</span><strong id="playStateLabel">停止中</strong></div>
+          <div class="metric"><span>表示ページURL</span><strong style="font-size:18px;" id="displayUrlLabel">/display.html</strong></div>
+        </div>
+      </div>
+
+      <aside class="panel hero-side">
+        <div class="state-screen">
+          <div class="status-chip" id="statusChip"><span class="dot"></span>システム待機</div>
+          <div class="big" id="headlineScene">待機中シーン</div>
+          <p class="sub" id="headlineMessage">スタート前の案内映像・音声を流せる状態です。</p>
+          <div class="toolbar">
+            <button class="primary" id="playStandbyBtn">待機中を再生</button>
+            <button class="secondary" id="playMainBtn">プレショーを再生</button>
+            <button class="secondary" id="playEndingBtn">終了後を再生</button>
+            <button class="danger" id="stopAllBtn">すべて停止</button>
+          </div>
+          <div class="toolbar">
+            <button class="secondary" id="copyDisplayUrlBtn">表示URLをコピー</button>
+            <button class="secondary" id="openDisplayBtn">表示ページを開く</button>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <main class="grid">
+      <section class="panel section span-8">
+        <h2>シーン設定</h2>
+        <p class="section-sub">各シーンごとに映像と音声を登録します。登録後は別端末の表示ページにも同じ素材が配信されます。</p>
+        <div class="scene-list" id="sceneCards"></div>
+      </section>
+
+      <section class="panel section span-4">
+        <h2>自動復帰設定</h2>
+        <p class="section-sub">終了後シーンの再生開始から何秒後に待機中へ戻すかを指定します。</p>
+        <div class="setting-grid">
+          <div class="field">
+            <label for="endingDelayInput">終了後の表示秒数</label>
+            <input id="endingDelayInput" type="number" min="1" value="15">
+          </div>
+          <div class="field">
+            <label for="masterVolumeInput">全体音量</label>
+            <input id="masterVolumeInput" type="number" min="0" max="100" value="100">
+          </div>
+        </div>
+        <div class="toolbar" style="margin-top: 14px;">
+          <button class="primary" id="saveSettingsBtn">設定を保存</button>
+          <button class="secondary" id="loadDemoBtn">デモ状態を入れる</button>
+        </div>
+        <p class="hint" style="margin-top: 14px;">
+          表示用端末では `display.html` を開いてください。操作ページからの更新は自動で同期されます。
+        </p>
+      </section>
+
+      <section class="panel section span-8">
+        <h2>操作側プレビュー</h2>
+        <p class="section-sub">このプレビューは操作端末向けです。表示端末では余計なUIを出さず、映像と音声だけを全画面で表示できます。</p>
+        <video id="videoPlayer" playsinline controls></video>
+        <div class="audio-box" style="margin-top: 14px;">
+          <div class="pill" id="loadedMediaLabel">メディア未設定</div>
+          <audio id="audioPlayer" controls></audio>
+        </div>
+      </section>
+
+      <section class="panel section span-4">
+        <h2>操作ログ</h2>
+        <p class="section-sub">切替、設定変更、素材登録を時刻つきで残します。</p>
+        <div class="log" id="eventLog"></div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const stateUrl = "/api/state";
+    const eventSource = new EventSource("/events");
+    const videoPlayer = document.getElementById("videoPlayer");
+    const audioPlayer = document.getElementById("audioPlayer");
+    const displayUrl = `${window.location.origin}/display.html`;
+    let state = null;
+    let countdownInterval = null;
+
+    document.getElementById("displayUrlLabel").textContent = "/display.html";
+    document.getElementById("playStandbyBtn").addEventListener("click", () => activateScene("standby"));
+    document.getElementById("playMainBtn").addEventListener("click", () => activateScene("main"));
+    document.getElementById("playEndingBtn").addEventListener("click", () => activateScene("ending"));
+    document.getElementById("stopAllBtn").addEventListener("click", stopAll);
+    document.getElementById("saveSettingsBtn").addEventListener("click", saveSettings);
+    document.getElementById("loadDemoBtn").addEventListener("click", loadDemo);
+    document.getElementById("copyDisplayUrlBtn").addEventListener("click", copyDisplayUrl);
+    document.getElementById("openDisplayBtn").addEventListener("click", () => window.open(displayUrl, "_blank"));
+
+    eventSource.onmessage = (event) => {
+      state = JSON.parse(event.data);
+      render();
+    };
+
+    fetchState();
+
+    async function fetchState() {
+      const response = await fetch(stateUrl, { cache: "no-store" });
+      state = await response.json();
+      render();
+    }
+
+    async function activateScene(sceneId) {
+      await fetch("/api/scene", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sceneId })
+      });
+    }
+
+    async function stopAll() {
+      await fetch("/api/stop", { method: "POST" });
+    }
+
+    async function saveSettings() {
+      await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          endingReturnDelay: Number(document.getElementById("endingDelayInput").value),
+          masterVolume: Number(document.getElementById("masterVolumeInput").value)
+        })
+      });
+    }
+
+    async function loadDemo() {
+      await fetch("/api/demo", { method: "POST" });
+    }
+
+    async function copyDisplayUrl() {
+      try {
+        await navigator.clipboard.writeText(displayUrl);
+      } catch (error) {
+        window.prompt("表示ページURL", displayUrl);
+      }
+    }
+
+    async function uploadMedia(sceneId, kind, file) {
+      if (!file) {
+        return;
+      }
+      const form = new FormData();
+      form.append("sceneId", sceneId);
+      form.append("kind", kind);
+      form.append("file", file);
+      await fetch("/api/upload", {
+        method: "POST",
+        body: form
+      });
+    }
+
+    function render() {
+      if (!state) {
+        return;
+      }
+
+      renderStatus();
+      renderSceneCards();
+      renderLogs();
+      renderPreview();
+      renderCountdown();
+      document.getElementById("endingDelayInput").value = state.endingReturnDelay;
+      document.getElementById("masterVolumeInput").value = state.masterVolume;
+    }
+
+    function renderStatus() {
+      const scene = state.availableScenes.find((item) => item.id === state.currentScene);
+      document.getElementById("currentSceneLabel").textContent = scene?.title || "-";
+      document.getElementById("playStateLabel").textContent = state.isPlaying ? "再生中" : "停止中";
+      document.getElementById("headlineScene").textContent = `${scene?.title || "-"}シーン`;
+      document.getElementById("headlineMessage").textContent = scene?.message || "";
+      document.getElementById("statusChip").innerHTML = `<span class="dot"></span>${state.isPlaying ? "出力中" : "システム待機"}`;
+    }
+
+    function renderSceneCards() {
+      const container = document.getElementById("sceneCards");
+      container.innerHTML = state.availableScenes.map((scene) => `
+        <article class="scene-card ${state.currentScene === scene.id ? "active" : ""}">
+          <div class="scene-head">
+            <div>
+              <span class="scene-type">${scene.title}</span>
+              <h3 style="margin-top: 10px;">${scene.title}シーン</h3>
+              <p class="hint" style="margin-top: 8px;">${scene.message}</p>
+            </div>
+            <div class="scene-actions">
+              <button class="primary" data-action="play" data-scene="${scene.id}">再生</button>
+            </div>
+          </div>
+          <div class="file-grid">
+            <div class="field">
+              <label for="video-${scene.id}">映像ファイル</label>
+              <input id="video-${scene.id}" type="file" accept="video/*">
+              <div class="hint">${escapeHtml(state.scenes[scene.id].videoName || "未登録")}</div>
+            </div>
+            <div class="field">
+              <label for="audio-${scene.id}">音声ファイル</label>
+              <input id="audio-${scene.id}" type="file" accept="audio/*">
+              <div class="hint">${escapeHtml(state.scenes[scene.id].audioName || "未登録")}</div>
+            </div>
+          </div>
+        </article>
+      `).join("");
+
+      container.querySelectorAll("[data-action='play']").forEach((button) => {
+        button.addEventListener("click", () => activateScene(button.dataset.scene));
+      });
+
+      state.availableScenes.forEach((scene) => {
+        document.getElementById(`video-${scene.id}`).addEventListener("change", (event) => {
+          void uploadMedia(scene.id, "video", event.target.files[0]);
+        });
+        document.getElementById(`audio-${scene.id}`).addEventListener("change", (event) => {
+          void uploadMedia(scene.id, "audio", event.target.files[0]);
+        });
+      });
+    }
+
+    function renderPreview() {
+      const sceneMedia = state.scenes[state.currentScene];
+      const videoUrl = sceneMedia.videoPath || "";
+      const audioUrl = sceneMedia.audioPath || "";
+
+      if (videoPlayer.src !== absoluteMediaUrl(videoUrl)) {
+        assignMedia(videoPlayer, videoUrl);
+      }
+      if (audioPlayer.src !== absoluteMediaUrl(audioUrl)) {
+        assignMedia(audioPlayer, audioUrl);
+      }
+
+      videoPlayer.volume = state.masterVolume / 100;
+      audioPlayer.volume = state.masterVolume / 100;
+
+      document.getElementById("loadedMediaLabel").textContent = describeMedia(sceneMedia);
+
+      if (state.isPlaying) {
+        void playMedia(videoPlayer, audioPlayer);
+      } else {
+        videoPlayer.pause();
+        audioPlayer.pause();
+      }
+    }
+
+    function renderLogs() {
+      const container = document.getElementById("eventLog");
+      if (!state.logs.length) {
+        container.innerHTML = '<div class="empty">まだログはありません。</div>';
+        return;
+      }
+
+      container.innerHTML = state.logs.map((item) => `
+        <div class="log-item">
+          <strong>${escapeHtml(item.message)}</strong>
+          <div class="hint">${item.time}</div>
+        </div>
+      `).join("");
+    }
+
+    function renderCountdown() {
+      if (countdownInterval) {
+        clearInterval(countdownInterval);
+      }
+
+      const el = document.getElementById("returnCountdown");
+      const update = () => {
+        if (!state?.returnAt) {
+          el.textContent = "-";
+          return;
+        }
+        const seconds = Math.max(0, Math.ceil((state.returnAt - Date.now()) / 1000));
+        el.textContent = `${seconds}秒`;
+      };
+
+      update();
+      countdownInterval = setInterval(update, 250);
+    }
+
+    function absoluteMediaUrl(url) {
+      return url ? `${window.location.origin}${url}` : "";
+    }
+
+    function assignMedia(player, url) {
+      if (!url) {
+        player.removeAttribute("src");
+        player.load();
+        return;
+      }
+      player.src = absoluteMediaUrl(url);
+    }
+
+    async function playMedia(video, audio) {
+      try {
+        if (video.src) {
+          video.currentTime = 0;
+          await video.play();
+        }
+      } catch (error) {}
+      try {
+        if (audio.src) {
+          audio.currentTime = 0;
+          await audio.play();
+        }
+      } catch (error) {}
+    }
+
+    function describeMedia(sceneMedia) {
+      const parts = [];
+      if (sceneMedia.videoName) {
+        parts.push(`映像: ${sceneMedia.videoName}`);
+      }
+      if (sceneMedia.audioName) {
+        parts.push(`音声: ${sceneMedia.audioName}`);
+      }
+      return parts.length ? parts.join(" / ") : "メディア未設定";
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+    }
+  </script>
+</body>
+</html>

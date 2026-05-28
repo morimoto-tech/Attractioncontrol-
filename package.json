@@ -1,0 +1,14 @@
+{
+  "name": "preshow-control-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pre-show control and display sync app for attraction operations",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

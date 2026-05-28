@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>プレショー表示ページ</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      color: white;
+      font-family: "Yu Gothic UI", "Hiragino Sans", sans-serif;
+      overflow: hidden;
+    }
+
+    .stage {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background:
+        radial-gradient(circle at center, rgba(255, 107, 61, 0.16), transparent 34%),
+        #000;
+    }
+
+    video {
+      width: 100vw;
+      height: 100vh;
+      object-fit: contain;
+      background: #000;
+    }
+
+    audio {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 18px;
+      color: rgba(255, 255, 255, 0.84);
+      text-align: center;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      background:
+        radial-gradient(circle at center, rgba(255, 107, 61, 0.12), transparent 38%),
+        rgba(0, 0, 0, 0.82);
+    }
+
+    .overlay strong {
+      font-size: clamp(28px, 4vw, 52px);
+      font-weight: 800;
+    }
+
+    .overlay span {
+      font-size: clamp(13px, 1.4vw, 18px);
+      color: rgba(255, 255, 255, 0.62);
+    }
+
+    .corner {
+      position: absolute;
+      left: 22px;
+      bottom: 18px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.75);
+      font-size: 12px;
+      letter-spacing: 0.06em;
+    }
+
+    .actions {
+      position: absolute;
+      right: 22px;
+      bottom: 18px;
+      display: flex;
+      gap: 10px;
+    }
+
+    button {
+      border: none;
+      cursor: pointer;
+      padding: 10px 14px;
+      border-radius: 999px;
+      font: inherit;
+      font-weight: 800;
+      background: rgba(255, 255, 255, 0.12);
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <video id="videoPlayer" playsinline></video>
+    <audio id="audioPlayer"></audio>
+    <div class="overlay" id="overlay">
+      <strong id="sceneLabel">待機中シーン</strong>
+      <span id="sceneMessage">操作ページから再生を開始してください</span>
+    </div>
+    <div class="corner" id="statusLabel">接続待機中</div>
+    <div class="actions">
+      <button id="fullscreenBtn">全画面</button>
+    </div>
+  </div>
+
+  <script>
+    const eventSource = new EventSource("/events");
+    const videoPlayer = document.getElementById("videoPlayer");
+    const audioPlayer = document.getElementById("audioPlayer");
+    const overlay = document.getElementById("overlay");
+    const sceneLabel = document.getElementById("sceneLabel");
+    const sceneMessage = document.getElementById("sceneMessage");
+    const statusLabel = document.getElementById("statusLabel");
+    const fullscreenBtn = document.getElementById("fullscreenBtn");
+
+    let state = null;
+    let countdownInterval = null;
+
+    fullscreenBtn.addEventListener("click", async () => {
+      const root = document.documentElement;
+      if (!document.fullscreenElement && root.requestFullscreen) {
+        try {
+          await root.requestFullscreen();
+        } catch (error) {}
+      }
+    });
+
+    eventSource.onmessage = (event) => {
+      state = JSON.parse(event.data);
+      render();
+    };
+
+    fetch("/api/state", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((payload) => {
+        state = payload;
+        render();
+      });
+
+    function render() {
+      if (!state) {
+        return;
+      }
+
+      const scene = state.availableScenes.find((item) => item.id === state.currentScene);
+      const sceneMedia = state.scenes[state.currentScene];
+
+      sceneLabel.textContent = `${scene?.title || "-"}シーン`;
+      sceneMessage.textContent = scene?.message || "";
+      statusLabel.textContent = statusText(scene?.title || "-");
+
+      assignMedia(videoPlayer, sceneMedia.videoPath);
+      assignMedia(audioPlayer, sceneMedia.audioPath);
+
+      videoPlayer.volume = state.masterVolume / 100;
+      audioPlayer.volume = state.masterVolume / 100;
+
+      if (state.isPlaying) {
+        overlay.style.display = "none";
+        void playMedia(videoPlayer, audioPlayer);
+      } else {
+        overlay.style.display = "flex";
+        videoPlayer.pause();
+        audioPlayer.pause();
+      }
+
+      renderCountdown();
+    }
+
+    function renderCountdown() {
+      if (countdownInterval) {
+        clearInterval(countdownInterval);
+      }
+
+      const update = () => {
+        const scene = state?.availableScenes.find((item) => item.id === state.currentScene);
+        statusLabel.textContent = statusText(scene?.title || "-");
+      };
+
+      update();
+      countdownInterval = setInterval(update, 250);
+    }
+
+    function statusText(title) {
+      if (state?.returnAt) {
+        const seconds = Math.max(0, Math.ceil((state.returnAt - Date.now()) / 1000));
+        return `${title} / 待機中へ ${seconds}秒`;
+      }
+      return state?.isPlaying ? `${title} / 再生中` : `${title} / 停止中`;
+    }
+
+    function absoluteMediaUrl(url) {
+      return url ? `${window.location.origin}${url}` : "";
+    }
+
+    function assignMedia(player, url) {
+      const absolute = absoluteMediaUrl(url);
+      if (!absolute) {
+        player.removeAttribute("src");
+        player.load();
+        return;
+      }
+      if (player.src !== absolute) {
+        player.src = absolute;
+      }
+    }
+
+    async function playMedia(video, audio) {
+      try {
+        if (video.src) {
+          video.currentTime = 0;
+          await video.play();
+        }
+      } catch (error) {}
+
+      try {
+        if (audio.src) {
+          audio.currentTime = 0;
+          await audio.play();
+        }
+      } catch (error) {}
+    }
+  </script>
+</body>
+</html>
