@@ -34,7 +34,9 @@ const defaultState = () => ({
   isPlaying: false,
   endingReturnDelay: 15,
   masterVolume: 100,
+  bgmVolume: 35,
   returnAt: null,
+  bgm: emptyBgmMedia(),
   scenes: {
     standby: emptySceneMedia(),
     main: emptySceneMedia(),
@@ -79,6 +81,7 @@ function normalizeState(candidate) {
   const next = {
     ...fallback,
     ...candidate,
+    bgm: { ...fallback.bgm, ...(candidate.bgm || {}) },
     scenes: {
       standby: { ...fallback.scenes.standby, ...(candidate.scenes?.standby || {}) },
       main: { ...fallback.scenes.main, ...(candidate.scenes?.main || {}) },
@@ -140,7 +143,8 @@ async function routeRequest(req, res) {
     const body = await readJson(req);
     state.endingReturnDelay = sanitizeDelay(body.endingReturnDelay);
     state.masterVolume = sanitizeVolume(body.masterVolume);
-    addLog(`設定を更新しました。自動復帰 ${state.endingReturnDelay}秒 / 音量 ${state.masterVolume}%`);
+    state.bgmVolume = sanitizeVolume(body.bgmVolume, 35);
+    addLog(`設定を更新しました。自動復帰 ${state.endingReturnDelay}秒 / 音量 ${state.masterVolume}% / BGM ${state.bgmVolume}%`);
     syncTimerToState();
     await persistAndBroadcast();
     return sendJson(res, 200, publicState());
@@ -148,7 +152,11 @@ async function routeRequest(req, res) {
 
   if (req.method === "POST" && reqUrl.pathname === "/api/media-urls") {
     const body = await readJson(req);
-    updateMediaUrls(body);
+    if (body.target === "bgm") {
+      updateBgmUrls(body);
+    } else {
+      updateMediaUrls(body);
+    }
     await persistAndBroadcast();
     return sendJson(res, 200, publicState());
   }
@@ -264,6 +272,13 @@ function updateMediaUrls(body) {
   addLog(`${SCENES[sceneId].title}のURL設定を更新しました。`);
 }
 
+function updateBgmUrls(body) {
+  const nextAudioUrl = sanitizeMediaUrl(body.audioUrl);
+  state.bgm.audioUrl = nextAudioUrl;
+  state.bgm.audioName = nextAudioUrl ? extractLabel(nextAudioUrl) : "";
+  addLog("共通BGMのURL設定を更新しました。");
+}
+
 function sanitizeMediaUrl(value) {
   const input = String(value || "").trim();
   if (!input) {
@@ -294,6 +309,7 @@ function loadDemoState() {
   state.isPlaying = false;
   state.endingReturnDelay = 12;
   state.masterVolume = 85;
+  state.bgmVolume = 35;
   state.returnAt = null;
   state.logs = [
     makeLog("プレショー用のデモ状態を読み込みました。"),
@@ -319,10 +335,19 @@ function publicState() {
     isPlaying: state.isPlaying,
     endingReturnDelay: state.endingReturnDelay,
     masterVolume: state.masterVolume,
+    bgmVolume: state.bgmVolume,
     returnAt: state.returnAt,
+    bgm: state.bgm,
     scenes: state.scenes,
     logs: state.logs,
     availableScenes: Object.values(SCENES)
+  };
+}
+
+function emptyBgmMedia() {
+  return {
+    audioUrl: "",
+    audioName: ""
   };
 }
 
@@ -359,10 +384,10 @@ function sanitizeDelay(value) {
   return Math.round(numeric);
 }
 
-function sanitizeVolume(value) {
+function sanitizeVolume(value, fallback = 100) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
-    return 100;
+    return fallback;
   }
   return Math.max(0, Math.min(100, Math.round(numeric)));
 }

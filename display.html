@@ -121,6 +121,7 @@
   <div class="stage">
     <video id="videoPlayer" playsinline></video>
     <audio id="audioPlayer"></audio>
+    <audio id="bgmPlayer" loop></audio>
     <div class="overlay" id="overlay">
       <strong id="sceneLabel">待機中シーン</strong>
       <span id="sceneMessage">操作ページから再生を開始してください。</span>
@@ -136,6 +137,7 @@
     const eventSource = new EventSource("/events");
     const videoPlayer = document.getElementById("videoPlayer");
     const audioPlayer = document.getElementById("audioPlayer");
+    const bgmPlayer = document.getElementById("bgmPlayer");
     const overlay = document.getElementById("overlay");
     const sceneLabel = document.getElementById("sceneLabel");
     const sceneMessage = document.getElementById("sceneMessage");
@@ -201,13 +203,16 @@
 
       assignMedia(videoPlayer, sceneMedia.videoUrl);
       assignMedia(audioPlayer, sceneMedia.audioUrl);
+      assignMedia(bgmPlayer, state.bgm?.audioUrl);
 
       videoPlayer.loop = state.currentScene === "standby";
       videoPlayer.volume = state.masterVolume / 100;
       audioPlayer.volume = state.masterVolume / 100;
+      bgmPlayer.volume = (state.bgmVolume ?? 35) / 100;
+      void playBgm(bgmPlayer);
 
       if (state.isPlaying) {
-        void playMedia(videoPlayer, audioPlayer);
+        void playMedia(videoPlayer, audioPlayer, bgmPlayer);
       } else {
         videoPlayer.pause();
         audioPlayer.pause();
@@ -256,7 +261,7 @@
       }
     }
 
-    async function playMedia(video, audio) {
+    async function playMedia(video, audio, bgm) {
       try {
         if (video.src && video.paused) {
           await video.play();
@@ -269,7 +274,16 @@
         if (audio.src && audio.paused) {
           await audio.play();
         }
-        if (audio.src) {
+        if (audio.src || bgm.src) {
+          playbackBlocked = false;
+        }
+      } catch (error) {
+        playbackBlocked = true;
+      }
+
+      try {
+        await playBgm(bgm);
+        if (bgm.src) {
           playbackBlocked = false;
         }
       } catch (error) {
@@ -299,8 +313,22 @@
         }
       } catch (error) {}
 
+      try {
+        if (bgmPlayer.src) {
+          await bgmPlayer.play();
+          bgmPlayer.pause();
+          bgmPlayer.currentTime = 0;
+        }
+      } catch (error) {}
+
       playbackBlocked = false;
       updateOverlay();
+    }
+
+    async function playBgm(player) {
+      if (player.src && player.paused) {
+        await player.play();
+      }
     }
 
     function updateOverlay(scene = state?.availableScenes.find((item) => item.id === state?.currentScene)) {

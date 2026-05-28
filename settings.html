@@ -175,6 +175,20 @@
 
     <section class="panel">
       <h2>URL設定</h2>
+      <div class="card">
+        <div class="card-head">
+          <h3>共通BGM</h3>
+          <span class="pill">常時再生</span>
+        </div>
+        <div class="field">
+          <label for="bgm-audio">BGM URL</label>
+          <input id="bgm-audio" type="url" placeholder="https://...">
+          <div class="meta" id="bgm-audio-name">未設定</div>
+        </div>
+        <div class="actions">
+          <button class="primary" id="saveBgmBtn" type="button">BGM URLを保存</button>
+        </div>
+      </div>
       <div class="scene-list" id="sceneUrlList"></div>
     </section>
 
@@ -191,6 +205,12 @@
           <div class="field">
             <label for="masterVolumeInput">全体音量</label>
             <input id="masterVolumeInput" type="number" min="0" max="100" value="100">
+          </div>
+        </div>
+        <div class="card">
+          <div class="field">
+            <label for="bgmVolumeInput">BGM音量</label>
+            <input id="bgmVolumeInput" type="number" min="0" max="100" value="35">
           </div>
         </div>
       </div>
@@ -211,6 +231,7 @@
     document.getElementById("openControlBtn").addEventListener("click", () => window.open(controlUrl, "_blank"));
     document.getElementById("openDisplayBtn").addEventListener("click", () => window.open(displayUrl, "_blank"));
     document.getElementById("saveSettingsBtn").addEventListener("click", saveSettings);
+    document.getElementById("saveBgmBtn").addEventListener("click", saveBgmUrl);
     document.getElementById("loadDemoBtn").addEventListener("click", loadDemo);
 
     eventSource.onmessage = (event) => {
@@ -232,7 +253,8 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           endingReturnDelay: Number(document.getElementById("endingDelayInput").value),
-          masterVolume: Number(document.getElementById("masterVolumeInput").value)
+          masterVolume: Number(document.getElementById("masterVolumeInput").value),
+          bgmVolume: Number(document.getElementById("bgmVolumeInput").value)
         })
       });
     }
@@ -256,6 +278,19 @@
       });
     }
 
+    async function saveBgmUrl() {
+      const audioUrl = document.getElementById("bgm-audio").value.trim();
+
+      await fetch("/api/media-urls", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          target: "bgm",
+          audioUrl
+        })
+      });
+    }
+
     function render() {
       if (!state) {
         return;
@@ -263,6 +298,9 @@
 
       document.getElementById("endingDelayInput").value = state.endingReturnDelay;
       document.getElementById("masterVolumeInput").value = state.masterVolume;
+      document.getElementById("bgmVolumeInput").value = state.bgmVolume ?? 35;
+      document.getElementById("bgm-audio").value = state.bgm?.audioUrl || "";
+      document.getElementById("bgm-audio-name").textContent = state.bgm?.audioName || "未設定";
       renderUrlList();
     }
 
