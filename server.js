@@ -1,5 +1,4 @@
 const http = require("http");
-const fs = require("fs");
 const fsp = require("fs/promises");
 const path = require("path");
 const { URL } = require("url");
@@ -7,7 +6,6 @@ const { URL } = require("url");
 const HOST = "0.0.0.0";
 const PORT = Number(process.env.PORT || 8787);
 const ROOT = __dirname;
-const MEDIA_DIR = path.join(ROOT, "media");
 const STATE_PATH = path.join(ROOT, "preshow-state.json");
 
 const SCENES = {
@@ -50,7 +48,6 @@ let state = defaultState();
 void boot();
 
 async function boot() {
-  await ensureStorage();
   state = await loadState();
   syncTimerToState();
 
@@ -66,15 +63,10 @@ async function boot() {
   });
 }
 
-async function ensureStorage() {
-  await fsp.mkdir(MEDIA_DIR, { recursive: true });
-}
-
 async function loadState() {
   try {
     const raw = await fsp.readFile(STATE_PATH, "utf8");
-    const parsed = JSON.parse(raw);
-    return normalizeState(parsed);
+    return normalizeState(JSON.parse(raw));
   } catch (error) {
     const fresh = defaultState();
     await saveState(fresh);
@@ -125,10 +117,6 @@ async function routeRequest(req, res) {
     return serveFile(res, path.join(ROOT, "settings.html"), "text/html; charset=utf-8");
   }
 
-  if (req.method === "GET" && reqUrl.pathname.startsWith("/media/")) {
-    return serveMedia(res, reqUrl.pathname);
-  }
-
   if (req.method === "GET" && reqUrl.pathname === "/api/state") {
     return sendJson(res, 200, publicState());
   }
@@ -158,9 +146,11 @@ async function routeRequest(req, res) {
     return sendJson(res, 200, publicState());
   }
 
-  if (req.method === "POST" && reqUrl.pathname === "/api/upload") {
-    await handleUpload(req, res);
-    return;
+  if (req.method === "POST" && reqUrl.pathname === "/api/media-urls") {
+    const body = await readJson(req);
+    updateMediaUrls(body);
+    await persistAndBroadcast();
+    return sendJson(res, 200, publicState());
   }
 
   if (req.method === "POST" && reqUrl.pathname === "/api/demo") {
@@ -178,26 +168,6 @@ async function serveFile(res, filePath, contentType) {
   res.end(buffer);
 }
 
-async function serveMedia(res, pathname) {
-  const relativePath = pathname.replace(/^\/+/, "");
-  const decodedPath = path.normalize(decodeURIComponent(relativePath));
-  const filePath = path.resolve(ROOT, decodedPath);
-
-  if (!filePath.startsWith(path.resolve(MEDIA_DIR))) {
-    return sendJson(res, 403, { error: "forbidden" });
-  }
-
-  try {
-    await fsp.access(filePath, fs.constants.R_OK);
-    const stream = fs.createReadStream(filePath);
-    const type = contentTypeFor(path.extname(filePath));
-    res.writeHead(200, { "Content-Type": type, "Cache-Control": "no-store" });
-    stream.pipe(res);
-  } catch (error) {
-    sendJson(res, 404, { error: "not_found" });
-  }
-}
-
 function handleEvents(req, res) {
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
@@ -212,39 +182,6 @@ function handleEvents(req, res) {
   req.on("close", () => {
     clients.delete(client);
   });
-}
-
-async function handleUpload(req, res) {
-  const request = new Request(`http://${req.headers.host || "localhost"}${req.url}`, {
-    method: req.method,
-    headers: req.headers,
-    body: req,
-    duplex: "half"
-  });
-
-  const form = await request.formData();
-  const sceneId = String(form.get("sceneId") || "");
-  const kind = String(form.get("kind") || "");
-  const file = form.get("file");
-
-  if (!SCENES[sceneId] || !["video", "audio"].includes(kind) || !(file instanceof File)) {
-    return sendJson(res, 400, { error: "invalid_upload" });
-  }
-
-  const bytes = Buffer.from(await file.arrayBuffer());
-  const ext = safeExt(file.name, file.type, kind);
-  const fileName = `${sceneId}-${kind}${ext}`;
-  const filePath = path.join(MEDIA_DIR, fileName);
-
-  await fsp.writeFile(filePath, bytes);
-
-  const scene = state.scenes[sceneId];
-  scene[`${kind}Path`] = `/media/${fileName}`;
-  scene[`${kind}Name`] = file.name;
-  addLog(`${SCENES[sceneId].title}に${kind === "video" ? "映像" : "音声"}を登録しました。`);
-
-  await persistAndBroadcast();
-  sendJson(res, 200, publicState());
 }
 
 function activateScene(sceneId) {
@@ -309,6 +246,48 @@ function syncTimerToState() {
   }, delay);
 }
 
+function updateMediaUrls(body) {
+  const sceneId = String(body.sceneId || "");
+  if (!SCENES[sceneId]) {
+    throw new Error("invalid_scene");
+  }
+
+  const scene = state.scenes[sceneId];
+  const nextVideoUrl = sanitizeMediaUrl(body.videoUrl);
+  const nextAudioUrl = sanitizeMediaUrl(body.audioUrl);
+
+  scene.videoUrl = nextVideoUrl;
+  scene.audioUrl = nextAudioUrl;
+  scene.videoName = nextVideoUrl ? extractLabel(nextVideoUrl) : "";
+  scene.audioName = nextAudioUrl ? extractLabel(nextAudioUrl) : "";
+
+  addLog(`${SCENES[sceneId].title}のURL設定を更新しました。`);
+}
+
+function sanitizeMediaUrl(value) {
+  const input = String(value || "").trim();
+  if (!input) {
+    return "";
+  }
+
+  const parsed = new URL(input);
+  if (!["https:", "http:"].includes(parsed.protocol)) {
+    throw new Error("invalid_media_url");
+  }
+
+  return parsed.toString();
+}
+
+function extractLabel(url) {
+  try {
+    const parsed = new URL(url);
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    return decodeURIComponent(parts[parts.length - 1] || parsed.hostname);
+  } catch (error) {
+    return url;
+  }
+}
+
 function loadDemoState() {
   clearReturnTimer();
   state.currentScene = "standby";
@@ -318,7 +297,7 @@ function loadDemoState() {
   state.returnAt = null;
   state.logs = [
     makeLog("プレショー用のデモ状態を読み込みました。"),
-    makeLog("端末Aで control.html、端末Bで display.html を開いてください。")
+    makeLog("操作ページと表示ページは公開URLで開いてください。")
   ];
 }
 
@@ -349,8 +328,8 @@ function publicState() {
 
 function emptySceneMedia() {
   return {
-    videoPath: "",
-    audioPath: "",
+    videoUrl: "",
+    audioUrl: "",
     videoName: "",
     audioName: ""
   };
@@ -386,50 +365,6 @@ function sanitizeVolume(value) {
     return 100;
   }
   return Math.max(0, Math.min(100, Math.round(numeric)));
-}
-
-function safeExt(name, mimeType, kind) {
-  const rawExt = path.extname(name || "").toLowerCase();
-  if (/^\.[a-z0-9]{1,8}$/.test(rawExt)) {
-    return rawExt;
-  }
-
-  if (mimeType?.includes("mp4")) {
-    return ".mp4";
-  }
-  if (mimeType?.includes("webm")) {
-    return ".webm";
-  }
-  if (mimeType?.includes("mpeg")) {
-    return ".mp3";
-  }
-  if (mimeType?.includes("wav")) {
-    return ".wav";
-  }
-  return kind === "video" ? ".mp4" : ".mp3";
-}
-
-function contentTypeFor(ext) {
-  switch (ext.toLowerCase()) {
-    case ".html":
-      return "text/html; charset=utf-8";
-    case ".js":
-      return "text/javascript; charset=utf-8";
-    case ".css":
-      return "text/css; charset=utf-8";
-    case ".mp4":
-      return "video/mp4";
-    case ".webm":
-      return "video/webm";
-    case ".mp3":
-      return "audio/mpeg";
-    case ".wav":
-      return "audio/wav";
-    case ".m4a":
-      return "audio/mp4";
-    default:
-      return "application/octet-stream";
-  }
 }
 
 function sendJson(res, statusCode, body) {

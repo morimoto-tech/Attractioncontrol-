@@ -109,7 +109,7 @@
       font-weight: 700;
     }
 
-    input[type="file"],
+    input[type="url"],
     input[type="number"] {
       width: 100%;
       padding: 11px 12px;
@@ -166,7 +166,7 @@
     <section class="panel">
       <span class="eyebrow">Settings Only</span>
       <h1>プレショー設定</h1>
-      <p class="sub">映像、音声、秒数、音量をここでまとめて設定します。操作は `control.html` で行います。</p>
+      <p class="sub">動画と音声はファイルではなく URL で設定します。公開された MP4 / MP3 のリンクを入れてください。</p>
       <div class="actions">
         <button class="secondary" id="openControlBtn" type="button">control.html を開く</button>
         <button class="secondary" id="openDisplayBtn" type="button">display.html を開く</button>
@@ -174,8 +174,8 @@
     </section>
 
     <section class="panel">
-      <h2>素材登録</h2>
-      <div class="scene-list" id="sceneUploadList"></div>
+      <h2>URL設定</h2>
+      <div class="scene-list" id="sceneUrlList"></div>
     </section>
 
     <section class="panel">
@@ -241,19 +241,18 @@
       await fetch("/api/demo", { method: "POST" });
     }
 
-    async function uploadMedia(sceneId, kind, file) {
-      if (!file) {
-        return;
-      }
+    async function saveMediaUrls(sceneId) {
+      const videoUrl = document.getElementById(`video-${sceneId}`).value.trim();
+      const audioUrl = document.getElementById(`audio-${sceneId}`).value.trim();
 
-      const form = new FormData();
-      form.append("sceneId", sceneId);
-      form.append("kind", kind);
-      form.append("file", file);
-
-      await fetch("/api/upload", {
+      await fetch("/api/media-urls", {
         method: "POST",
-        body: form
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sceneId,
+          videoUrl,
+          audioUrl
+        })
       });
     }
 
@@ -264,38 +263,38 @@
 
       document.getElementById("endingDelayInput").value = state.endingReturnDelay;
       document.getElementById("masterVolumeInput").value = state.masterVolume;
-      renderUploadList();
+      renderUrlList();
     }
 
-    function renderUploadList() {
-      const container = document.getElementById("sceneUploadList");
+    function renderUrlList() {
+      const container = document.getElementById("sceneUrlList");
       container.innerHTML = state.availableScenes.map((scene) => `
         <div class="card">
           <div class="card-head">
             <h3>${escapeHtml(scene.title)}</h3>
-            <span class="pill">${state.currentScene === scene.id ? "現在のシーン" : "登録用"}</span>
+            <span class="pill">${state.currentScene === scene.id ? "現在のシーン" : "設定用"}</span>
           </div>
           <div class="field-grid">
             <div class="field">
-              <label for="video-${scene.id}">映像</label>
-              <input id="video-${scene.id}" type="file" accept="video/*">
-              <div class="meta">${escapeHtml(state.scenes[scene.id].videoName || "未登録")}</div>
+              <label for="video-${scene.id}">映像URL</label>
+              <input id="video-${scene.id}" type="url" placeholder="https://..." value="${escapeAttribute(state.scenes[scene.id].videoUrl || "")}">
+              <div class="meta">${escapeHtml(state.scenes[scene.id].videoName || "未設定")}</div>
             </div>
             <div class="field">
-              <label for="audio-${scene.id}">音声</label>
-              <input id="audio-${scene.id}" type="file" accept="audio/*">
-              <div class="meta">${escapeHtml(state.scenes[scene.id].audioName || "未登録")}</div>
+              <label for="audio-${scene.id}">音声URL</label>
+              <input id="audio-${scene.id}" type="url" placeholder="https://..." value="${escapeAttribute(state.scenes[scene.id].audioUrl || "")}">
+              <div class="meta">${escapeHtml(state.scenes[scene.id].audioName || "未設定")}</div>
             </div>
+          </div>
+          <div class="actions">
+            <button class="primary" type="button" data-scene="${scene.id}">このシーンのURLを保存</button>
           </div>
         </div>
       `).join("");
 
-      state.availableScenes.forEach((scene) => {
-        document.getElementById(`video-${scene.id}`).addEventListener("change", (event) => {
-          void uploadMedia(scene.id, "video", event.target.files[0]);
-        });
-        document.getElementById(`audio-${scene.id}`).addEventListener("change", (event) => {
-          void uploadMedia(scene.id, "audio", event.target.files[0]);
+      container.querySelectorAll("[data-scene]").forEach((button) => {
+        button.addEventListener("click", () => {
+          void saveMediaUrls(button.dataset.scene);
         });
       });
     }
@@ -307,6 +306,10 @@
         .replaceAll(">", "&gt;")
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#39;");
+    }
+
+    function escapeAttribute(value) {
+      return escapeHtml(value).replaceAll("`", "&#96;");
     }
   </script>
 </body>
