@@ -37,14 +37,6 @@
       background: #000;
     }
 
-    audio {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      opacity: 0;
-      pointer-events: none;
-    }
-
     .overlay {
       position: absolute;
       inset: 0;
@@ -120,10 +112,8 @@
 <body>
   <div class="stage">
     <video id="videoPlayer" playsinline></video>
-    <audio id="audioPlayer"></audio>
-    <audio id="bgmPlayer" loop></audio>
     <div class="overlay" id="overlay">
-      <strong id="sceneLabel">待機中シーン</strong>
+      <strong id="sceneLabel">開始前シーン</strong>
       <span id="sceneMessage">操作ページから再生を開始してください。</span>
       <button id="enablePlaybackBtn">再生を有効化</button>
     </div>
@@ -136,8 +126,6 @@
   <script>
     const eventSource = new EventSource("/events");
     const videoPlayer = document.getElementById("videoPlayer");
-    const audioPlayer = document.getElementById("audioPlayer");
-    const bgmPlayer = document.getElementById("bgmPlayer");
     const overlay = document.getElementById("overlay");
     const sceneLabel = document.getElementById("sceneLabel");
     const sceneMessage = document.getElementById("sceneMessage");
@@ -178,7 +166,7 @@
     });
 
     videoPlayer.addEventListener("error", () => {
-      videoErrorMessage = "この端末では映像URLを再生できない可能性があります。MP4(H.264) の公開URLを確認してください。";
+      videoErrorMessage = "映像を再生できません。URLか形式を確認してください。";
       updateOverlay();
     });
 
@@ -202,20 +190,13 @@
       statusLabel.textContent = statusText(scene?.title || "-");
 
       assignMedia(videoPlayer, sceneMedia.videoUrl);
-      assignMedia(audioPlayer, sceneMedia.audioUrl);
-      assignMedia(bgmPlayer, state.bgm?.audioUrl);
-
       videoPlayer.loop = state.currentScene === "standby";
-      videoPlayer.volume = state.masterVolume / 100;
-      audioPlayer.volume = state.masterVolume / 100;
-      bgmPlayer.volume = (state.bgmVolume ?? 35) / 100;
-      void playBgm(bgmPlayer);
+      videoPlayer.volume = sceneVolume(sceneMedia);
 
-      if (state.isPlaying) {
-        void playMedia(videoPlayer, audioPlayer, bgmPlayer);
+      if (state.isPlaying && sceneMedia.videoUrl) {
+        void playVideo();
       } else {
         videoPlayer.pause();
-        audioPlayer.pause();
       }
 
       updateOverlay(scene);
@@ -238,14 +219,14 @@
 
     function statusText(title) {
       if (videoErrorMessage) {
-        return `${title} / 映像URLを確認`;
+        return `${title} / 映像確認`;
       }
       if (playbackBlocked) {
         return `${title} / 表示端末で再生許可待ち`;
       }
       if (state?.returnAt) {
         const seconds = Math.max(0, Math.ceil((state.returnAt - Date.now()) / 1000));
-        return `${title} / 待機中へ ${seconds}秒`;
+        return `${title} / 開始前へ ${seconds}秒`;
       }
       return state?.isPlaying ? `${title} / 再生中` : `${title} / 停止中`;
     }
@@ -261,35 +242,21 @@
       }
     }
 
-    async function playMedia(video, audio, bgm) {
+    function sceneVolume(sceneMedia) {
+      const base = (state?.masterVolume ?? 100) / 100;
+      const multiplier = sceneMedia?.volumeMultiplier ?? 1;
+      return Math.max(0, Math.min(1, base * multiplier));
+    }
+
+    async function playVideo() {
       try {
-        if (video.src && video.paused) {
-          await video.play();
+        if (videoPlayer.src && videoPlayer.paused) {
+          await videoPlayer.play();
         }
+        playbackBlocked = false;
       } catch (error) {
         playbackBlocked = true;
       }
-
-      try {
-        if (audio.src && audio.paused) {
-          await audio.play();
-        }
-        if (audio.src || bgm.src) {
-          playbackBlocked = false;
-        }
-      } catch (error) {
-        playbackBlocked = true;
-      }
-
-      try {
-        await playBgm(bgm);
-        if (bgm.src) {
-          playbackBlocked = false;
-        }
-      } catch (error) {
-        playbackBlocked = true;
-      }
-
       updateOverlay();
     }
 
@@ -305,34 +272,12 @@
         }
       } catch (error) {}
 
-      try {
-        if (audioPlayer.src) {
-          await audioPlayer.play();
-          audioPlayer.pause();
-          audioPlayer.currentTime = 0;
-        }
-      } catch (error) {}
-
-      try {
-        if (bgmPlayer.src) {
-          await bgmPlayer.play();
-          bgmPlayer.pause();
-          bgmPlayer.currentTime = 0;
-        }
-      } catch (error) {}
-
       playbackBlocked = false;
       updateOverlay();
     }
 
-    async function playBgm(player) {
-      if (player.src && player.paused) {
-        await player.play();
-      }
-    }
-
     function updateOverlay(scene = state?.availableScenes.find((item) => item.id === state?.currentScene)) {
-      const shouldShow = !state?.isPlaying || playbackBlocked || Boolean(videoErrorMessage);
+      const shouldShow = !state?.isPlaying || playbackBlocked || Boolean(videoErrorMessage) || !state?.scenes?.[state.currentScene]?.videoUrl;
       overlay.style.display = shouldShow ? "flex" : "none";
 
       if (videoErrorMessage) {
@@ -344,6 +289,9 @@
       } else if (!state?.isPlaying) {
         sceneLabel.textContent = `${scene?.title || "-"}シーン`;
         sceneMessage.textContent = scene?.message || "操作ページから再生を開始してください。";
+      } else if (!state?.scenes?.[state.currentScene]?.videoUrl) {
+        sceneLabel.textContent = `${scene?.title || "-"}シーン`;
+        sceneMessage.textContent = scene?.message || "";
       }
 
       enablePlaybackBtn.style.display = playbackBlocked || !playbackUnlocked ? "inline-flex" : "none";

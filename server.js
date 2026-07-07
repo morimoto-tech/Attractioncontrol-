@@ -8,21 +8,33 @@ const PORT = Number(process.env.PORT || 8787);
 const ROOT = __dirname;
 const STATE_PATH = path.join(ROOT, "preshow-state.json");
 
+const STANDBY_URL = "https://res.cloudinary.com/dccdskvu2/video/upload/v1782729443/%E6%9C%AC%E6%96%87%E3%82%92%E8%BF%BD%E5%8A%A0_jf1qym.mp4";
+const MAIN_URL = "https://pub-0ed61d4ebc75420aad491fe4a7019ba8.r2.dev/main.mp4";
+
 const SCENES = {
   standby: {
     id: "standby",
-    title: "待機中",
-    message: "スタート前の案内映像・音声"
+    title: "開始前",
+    message: "開始前の案内映像をループ再生します。",
+    videoUrl: STANDBY_URL,
+    videoName: "開始前映像",
+    volumeMultiplier: 0.9
   },
   main: {
     id: "main",
     title: "プレショー",
-    message: "本編の映像・音声"
+    message: "プレショー本編を再生します。",
+    videoUrl: MAIN_URL,
+    videoName: "プレショー本編",
+    volumeMultiplier: 1.15
   },
   ending: {
     id: "ending",
     title: "終了後",
-    message: "終了後に一定時間流す映像・音声"
+    message: "30秒待機したあと、自動で開始前に戻ります。",
+    videoUrl: "",
+    videoName: "",
+    volumeMultiplier: 1
   }
 };
 
@@ -32,16 +44,10 @@ let returnTimer = null;
 const defaultState = () => ({
   currentScene: "standby",
   isPlaying: false,
-  endingReturnDelay: 15,
+  endingReturnDelay: 30,
   masterVolume: 100,
-  bgmVolume: 35,
   returnAt: null,
-  bgm: emptyBgmMedia(),
-  scenes: {
-    standby: emptySceneMedia(),
-    main: emptySceneMedia(),
-    ending: emptySceneMedia()
-  },
+  scenes: buildSceneState(),
   logs: [makeLog("プレショーサーバーを初期化しました。")]
 });
 
@@ -81,12 +87,7 @@ function normalizeState(candidate) {
   const next = {
     ...fallback,
     ...candidate,
-    bgm: { ...fallback.bgm, ...(candidate.bgm || {}) },
-    scenes: {
-      standby: { ...fallback.scenes.standby, ...(candidate.scenes?.standby || {}) },
-      main: { ...fallback.scenes.main, ...(candidate.scenes?.main || {}) },
-      ending: { ...fallback.scenes.ending, ...(candidate.scenes?.ending || {}) }
-    },
+    scenes: buildSceneState(),
     logs: Array.isArray(candidate.logs) && candidate.logs.length ? candidate.logs.slice(0, 40) : fallback.logs
   };
 
@@ -98,7 +99,15 @@ function normalizeState(candidate) {
 }
 
 async function saveState(nextState = state) {
-  await fsp.writeFile(STATE_PATH, JSON.stringify(nextState, null, 2), "utf8");
+  const storableState = {
+    currentScene: nextState.currentScene,
+    isPlaying: nextState.isPlaying,
+    endingReturnDelay: nextState.endingReturnDelay,
+    masterVolume: nextState.masterVolume,
+    returnAt: nextState.returnAt,
+    logs: nextState.logs
+  };
+  await fsp.writeFile(STATE_PATH, JSON.stringify(storableState, null, 2), "utf8");
 }
 
 async function routeRequest(req, res) {
@@ -142,21 +151,9 @@ async function routeRequest(req, res) {
   if (req.method === "POST" && reqUrl.pathname === "/api/settings") {
     const body = await readJson(req);
     state.endingReturnDelay = sanitizeDelay(body.endingReturnDelay);
-    state.masterVolume = sanitizeVolume(body.masterVolume);
-    state.bgmVolume = sanitizeVolume(body.bgmVolume, 35);
-    addLog(`設定を更新しました。自動復帰 ${state.endingReturnDelay}秒 / 音量 ${state.masterVolume}% / BGM ${state.bgmVolume}%`);
+    state.masterVolume = sanitizeVolume(body.masterVolume, 100);
+    addLog(`設定を更新しました。終了後 ${state.endingReturnDelay}秒 / 音量 ${state.masterVolume}%`);
     syncTimerToState();
-    await persistAndBroadcast();
-    return sendJson(res, 200, publicState());
-  }
-
-  if (req.method === "POST" && reqUrl.pathname === "/api/media-urls") {
-    const body = await readJson(req);
-    if (body.target === "bgm") {
-      updateBgmUrls(body);
-    } else {
-      updateMediaUrls(body);
-    }
     await persistAndBroadcast();
     return sendJson(res, 200, publicState());
   }
@@ -184,11 +181,9 @@ function handleEvents(req, res) {
   });
   res.write(`data: ${JSON.stringify(publicState())}\n\n`);
 
-  const client = res;
-  clients.add(client);
-
+  clients.add(res);
   req.on("close", () => {
-    clients.delete(client);
+    clients.delete(res);
   });
 }
 
@@ -207,7 +202,7 @@ function activateScene(sceneId) {
     state.returnAt = Date.now() + state.endingReturnDelay * 1000;
     returnTimer = setTimeout(() => {
       activateScene("standby");
-      addLog("終了後のタイマー満了で待機中へ戻しました。");
+      addLog("終了後の待機が終わり、開始前へ戻しました。");
       void persistAndBroadcast();
     }, state.endingReturnDelay * 1000);
   }
@@ -243,77 +238,27 @@ function syncTimerToState() {
     state.currentScene = "standby";
     state.isPlaying = true;
     state.returnAt = null;
-    addLog("終了後の復帰タイミングを再計算し、待機中へ戻しました。");
+    addLog("終了後の待機を再計算し、開始前へ戻しました。");
     return;
   }
 
   returnTimer = setTimeout(() => {
     activateScene("standby");
-    addLog("終了後のタイマー満了で待機中へ戻しました。");
+    addLog("終了後の待機が終わり、開始前へ戻しました。");
     void persistAndBroadcast();
   }, delay);
-}
-
-function updateMediaUrls(body) {
-  const sceneId = String(body.sceneId || "");
-  if (!SCENES[sceneId]) {
-    throw new Error("invalid_scene");
-  }
-
-  const scene = state.scenes[sceneId];
-  const nextVideoUrl = sanitizeMediaUrl(body.videoUrl);
-  const nextAudioUrl = sanitizeMediaUrl(body.audioUrl);
-
-  scene.videoUrl = nextVideoUrl;
-  scene.audioUrl = nextAudioUrl;
-  scene.videoName = nextVideoUrl ? extractLabel(nextVideoUrl) : "";
-  scene.audioName = nextAudioUrl ? extractLabel(nextAudioUrl) : "";
-
-  addLog(`${SCENES[sceneId].title}のURL設定を更新しました。`);
-}
-
-function updateBgmUrls(body) {
-  const nextAudioUrl = sanitizeMediaUrl(body.audioUrl);
-  state.bgm.audioUrl = nextAudioUrl;
-  state.bgm.audioName = nextAudioUrl ? extractLabel(nextAudioUrl) : "";
-  addLog("共通BGMのURL設定を更新しました。");
-}
-
-function sanitizeMediaUrl(value) {
-  const input = String(value || "").trim();
-  if (!input) {
-    return "";
-  }
-
-  const parsed = new URL(input);
-  if (!["https:", "http:"].includes(parsed.protocol)) {
-    throw new Error("invalid_media_url");
-  }
-
-  return parsed.toString();
-}
-
-function extractLabel(url) {
-  try {
-    const parsed = new URL(url);
-    const parts = parsed.pathname.split("/").filter(Boolean);
-    return decodeURIComponent(parts[parts.length - 1] || parsed.hostname);
-  } catch (error) {
-    return url;
-  }
 }
 
 function loadDemoState() {
   clearReturnTimer();
   state.currentScene = "standby";
   state.isPlaying = false;
-  state.endingReturnDelay = 12;
-  state.masterVolume = 85;
-  state.bgmVolume = 35;
+  state.endingReturnDelay = 30;
+  state.masterVolume = 100;
   state.returnAt = null;
   state.logs = [
-    makeLog("プレショー用のデモ状態を読み込みました。"),
-    makeLog("操作ページと表示ページは公開URLで開いてください。")
+    makeLog("デモ状態を読み込みました。"),
+    makeLog("開始前はループ、本編は少し大きめ、終了後は30秒待機です。")
   ];
 }
 
@@ -335,29 +280,26 @@ function publicState() {
     isPlaying: state.isPlaying,
     endingReturnDelay: state.endingReturnDelay,
     masterVolume: state.masterVolume,
-    bgmVolume: state.bgmVolume,
     returnAt: state.returnAt,
-    bgm: state.bgm,
-    scenes: state.scenes,
+    scenes: buildSceneState(),
     logs: state.logs,
     availableScenes: Object.values(SCENES)
   };
 }
 
-function emptyBgmMedia() {
-  return {
-    audioUrl: "",
-    audioName: ""
-  };
-}
-
-function emptySceneMedia() {
-  return {
-    videoUrl: "",
-    audioUrl: "",
-    videoName: "",
-    audioName: ""
-  };
+function buildSceneState() {
+  return Object.fromEntries(
+    Object.values(SCENES).map((scene) => [
+      scene.id,
+      {
+        videoUrl: scene.videoUrl,
+        audioUrl: "",
+        videoName: scene.videoName,
+        audioName: "",
+        volumeMultiplier: scene.volumeMultiplier
+      }
+    ])
+  );
 }
 
 function makeLog(message) {
@@ -379,7 +321,7 @@ function addLog(message) {
 function sanitizeDelay(value) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric) || numeric < 1) {
-    return 15;
+    return 30;
   }
   return Math.round(numeric);
 }
